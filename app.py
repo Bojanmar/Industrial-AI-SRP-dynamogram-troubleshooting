@@ -13,6 +13,11 @@ import streamlit as st
 import torch
 import matplotlib.pyplot as plt
 
+import base64
+import requests
+from pathlib import Path
+
+
 # --- allow imports from src/ ---
 ROOT = os.path.dirname(os.path.abspath(__file__))
 SRC_DIR = os.path.join(ROOT, "src")
@@ -91,6 +96,65 @@ def get_curve(df: pd.DataFrame, graph_id: str) -> Tuple[np.ndarray, np.ndarray]:
         g = g.sort_values("x")
 
     return g["x"].to_numpy(dtype=np.float64), g["y"].to_numpy(dtype=np.float64)
+
+
+def _github_download_file(repo_full: str, path_in_repo: str, token: str) -> bytes:
+    """
+    Download a file from a private GitHub repo via the Contents API.
+    Returns raw bytes.
+    """
+    url = f"https://api.github.com/repos/{repo_full}/contents/{path_in_repo}"
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "streamlit-app",
+    }
+    r = requests.get(url, headers=headers, timeout=60)
+    if r.status_code != 200:
+        raise RuntimeError(
+            f"GitHub download failed for {repo_full}/{path_in_repo} "
+            f"(status={r.status_code}): {r.text}"
+        )
+
+    data = r.json()
+    if "content" not in data or "encoding" not in data:
+        raise RuntimeError(f"Unexpected GitHub API response for {path_in_repo}: {data}")
+
+    if data["encoding"] != "base64":
+        raise RuntimeError(f"Unsupported encoding from GitHub API: {data['encoding']}")
+
+    content_b64 = data["content"]
+    return base64.b64decode(content_b64)
+
+
+def ensure_private_artifacts(local_run_dir: str):
+    """
+    Ensure model artifacts exist locally by downloading them from a private GitHub repo.
+    """
+    token = st.secrets.get("GITHUB_TOKEN", None)
+    repo = st.secrets.get("PRIVATE_REPO", None)
+    pt_path = st.secrets.get("MODEL_PT_PATH", "best_hybrid7.pt")
+    npz_path = st.secrets.get("SCALER_NPZ_PATH", "feature_scaler.npz")
+
+    if not token or not repo:
+        raise RuntimeError(
+            "Missing Streamlit Secrets. Please set GITHUB_TOKEN and PRIVATE_REPO in Streamlit Secrets."
+        )
+
+    run_dir = Path(local_run_dir)
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    local_pt = run_dir / "best_hybrid7.pt"
+    local_npz = run_dir / "feature_scaler.npz"
+
+    # Download only if missing
+    if not local_pt.exists():
+        blob = _github_download_file(repo, pt_path, token)
+        local_pt.write_bytes(blob)
+
+    if not local_npz.exists():
+        blob = _github_download_file(repo, npz_path, token)
+        local_npz.write_bytes(blob)
 
 
 # ============================================================
@@ -276,12 +340,12 @@ if not graph_ids:
 
 # Load model
 try:
-    model, class_names, scaler, ckpt_path, device, device_str = load_model(
-        run_dir, device_str
-    )
+    ensure_private_artifacts(run_dir)
+    model, class_names, scaler, ckpt_path, device, device_str = load_model(run_dir, device_str)
 except Exception as e:
     st.error(f"Failed to load model: {e}")
     st.stop()
+
 
 st.caption(f"Loaded checkpoint: `{ckpt_path}`")
 st.caption(

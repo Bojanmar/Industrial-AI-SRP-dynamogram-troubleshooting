@@ -6,3 +6,5 @@ matplotlib
 torch
 torchvision
 torchaudio
+requests
+streamlit
