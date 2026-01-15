@@ -278,6 +278,9 @@ Developed by an oil & gas production technology professional with extensive expe
 
 ## Disclaimer
 
+All modeling concepts, feature definitions, and system-level design choices in this repository are the original work of **Bojan Martinović**.  
+Use of this code or trained models requires clear attribution to the original author as defined by the Apache License 2.0.
+
 ### What Is Intentionally Not Included
 
 This repository does **not** include:
