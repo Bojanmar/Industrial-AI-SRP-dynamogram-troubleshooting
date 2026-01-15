@@ -1,0 +1,16 @@
+                       precision    recall  f1-score   support
+
+       Bottom tagging     0.8293    0.5312    0.6476        64
+     Dobar dinamogram     0.1892    0.8750    0.3111         8
+Flowing throught pump     0.9721    0.9831    0.9775       177
+          Fluid pound     0.2308    0.2143    0.2222        14
+          Gas in pump     0.9396    0.8465    0.8906       202
+       High viscosity     0.5385    0.7000    0.6087        10
+   Polish rod tagging     0.7500    0.6000    0.6667         5
+            Pump wear     0.5714    0.7273    0.6400        22
+      Stucked plunger     1.0000    1.0000    1.0000         7
+           TV leaking     0.6000    0.8000    0.6857        15
+
+             accuracy                         0.8282       524
+            macro avg     0.6621    0.7277    0.6650       524
+         weighted avg     0.8728    0.8282    0.8411       524

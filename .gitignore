@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+.venv/
+
+# Raw / confidential data
+data/*.csv
+data/*.parquet
+data/*.npy
+
+# Allow documentation files in data/
+!data/README.md
+!data/schema_example.csv
+
+# Model binaries
+results/**/*.pt
+results/**/*scaler*.npz
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# =========================
+# RESULTS - sensitive CSVs
+# =========================
+
+# Ignore prediction outputs and split definitions
+results/**/*predictions*.csv
+results/**/*_ids.csv
+results/**/split_*.csv
+
+# =========================
+# RESULTS - model binaries
+# =========================
+
+results/**/*.pt
+results/**/*scaler*.npz
+
+# =========================
+# ALLOW key result artifacts
+# =========================
+
+!results/**/metrics.csv
+!results/**/feature_names.csv
+!results/**/label_mapping_kept.csv
