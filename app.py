@@ -366,12 +366,15 @@ try:
     else:
         st.caption("Using cached model artifacts.")
 
-    model, class_names, model_type, ckpt_path, device_str = load_model(
+    model, class_names, scaler, ckpt_path, device_str = load_model(
         run_dir, device_str=device_str
     )
+    device = torch.device(device_str)
+
     model_name = "hybrid7"
     model_mode = "frozen inference"
     model_hash = short_file_hash(ckpt_path)
+
 
 
 except Exception as e:
