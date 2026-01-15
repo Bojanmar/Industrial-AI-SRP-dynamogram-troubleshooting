@@ -20,6 +20,10 @@ data/*.npy
 results/**/*.pt
 results/**/*scaler*.npz
 
+# Training code (keep private)
+src/train.py
+
+
 # OS
 .DS_Store
 Thumbs.db
