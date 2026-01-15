@@ -18,6 +18,19 @@ It demonstrates how machine learning can be made **usable, explainable, and trus
 > **This is not just a model — it is a complete diagnostic pipeline, from raw data to production-ready inference.**
 
 ---
+## Live Demo
+
+🔗 **Streamlit Demo:**  
+https://<your-streamlit-app>.streamlit.app
+
+The demo allows interactive inspection of individual SRP dynamograms,
+Top-2 predictions, and confidence-aware diagnostic behavior.
+
+## Quickstart (Local)
+
+``bash
+pip install -r requirements.txt
+streamlit r
 
 ## Industrial Problem Context
 

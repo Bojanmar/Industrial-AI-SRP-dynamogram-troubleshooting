@@ -8,7 +8,7 @@ __pycache__/
 .venv/
 
 # Raw / confidential data
-data/*.csv
+
 data/*.parquet
 data/*.npy
 
