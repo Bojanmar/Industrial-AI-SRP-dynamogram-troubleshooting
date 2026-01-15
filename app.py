@@ -78,6 +78,16 @@ def load_csv(file) -> pd.DataFrame:
     df = df.replace([np.inf, -np.inf], np.nan)
     df = df.dropna(subset=["graph_id", "x", "y"]).copy()
     return df
+import hashlib
+
+def short_file_hash(path: str, n: int = 8) -> str:
+    """Return short SHA256 hash of a file (first n chars)."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            h.update(chunk)
+    return h.hexdigest()[:n]
+
 
 
 def list_graph_ids(df: pd.DataFrame) -> List[str]:
@@ -165,7 +175,7 @@ def ensure_private_artifacts(local_run_dir: str) -> bool:
 
 # ============================================================
 # Model loading (Hybrid-7 only)
-# ============================================================
+## ============================================================
 @st.cache_resource
 def load_model(run_dir: str, device_str: str):
     ckpt_path = os.path.join(run_dir, "best_hybrid7.pt")
@@ -200,7 +210,9 @@ def load_model(run_dir: str, device_str: str):
     model.to(device).eval()
 
     scaler = np.load(scaler_path)
-    return model, class_names, scaler, ckpt_path, device, device_str
+
+    # ⬇⬇⬇ STANDARDIZED RETURN (5 items)
+    return model, class_names, scaler, ckpt_path, device_str
 
 
 # ============================================================
@@ -357,6 +369,10 @@ try:
     model, class_names, model_type, ckpt_path, device_str = load_model(
         run_dir, device_str=device_str
     )
+    model_name = "hybrid7"
+    model_mode = "frozen inference"
+    model_hash = short_file_hash(ckpt_path)
+
 
 except Exception as e:
     st.error(f"Failed to load model: {e}")
@@ -405,6 +421,8 @@ with col_left:
 
     # Always green prediction style
     st.success(f"**Prediction:** {l1}  \nConfidence: **{p1:.2f}**")
+    st.caption(f"Model: {model_name} ({model_mode}) · Version: {model_hash}")
+
 
     st.markdown("### Top probabilities")
     prob_bar_top2(class_names, pred["probs"])
