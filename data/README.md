@@ -1,90 +1,93 @@
-## Dataset Specification
-SRP Dynamogram Tabular Format (Production-Oriented)
-Purpose
+# Dataset Specification
+## SRP Dynamogram Tabular Format (Production-Oriented)
 
-This repository uses a long/tabular representation of Sucker Rod Pump (SRP) dynamometer cards, where each dynamogram is stored as a set of sampled curve points.
+---
+
+## Purpose
+
+This repository uses a **long / tabular representation** of **Sucker Rod Pump (SRP) dynamometer cards**, where each dynamogram is stored as a set of sampled curve points.
 
 This format is intentionally chosen to support:
 
- reproducible preprocessing,
+- **reproducible preprocessing**
+- **physics-informed feature engineering**
+- **hybrid deep learning models**
+- **production-grade inference pipelines**
 
-physics-informed feature engineering,
+The dataset structure reflects **real industrial data flows**, not academic toy datasets.
 
-hybrid deep learning models,
+---
 
-and production-grade inference pipelines.
+## Data Representation Concept
 
-The dataset structure reflects real industrial data flows, not academic toy datasets.
+Each dynamogram represents **one pump cycle** and is identified by a unique `graph_id`.
 
-Data Representation Concept
+Each row in the dataset corresponds to **one sampled point** of that dynamogram curve.
 
-Each dynamogram represents one pump cycle and is identified by a unique graph_id.
+One dynamogram → many rows
+One graph_id → one physical pump condition
 
-Each row in the dataset corresponds to one sampled point of that dynamogram curve.
+This representation enables:
 
-One dynamogram  →  many rows
-One graph_id    →  one physical pump condition
+- graph-level splitting (**no data leakage**)
+- flexible resampling resolutions
+- robust normalization independent of original sampling density
 
+---
 
-This allows:
+## Required Columns
 
-graph-level splitting (no data leakage),
+The dataset **must** contain the following columns:
 
-flexible resampling resolutions,
+---
 
-robust normalization independent of original sampling density.
-
-Required Columns
-
-The dataset must contain the following columns:
-
-1) graph_id (string)
+### 1) `graph_id` *(string)*
 
 Unique identifier of a single SRP dynamogram.
 
-All rows belonging to the same dynamogram must share the same graph_id.
+All rows belonging to the same dynamogram **must share the same `graph_id`**.
 
-Examples
+#### Examples
+Gas in pump/10032
 
-2. Gas in pump/10032
-3. Fluid pound/151
+Fluid pound/151
 Flowing through pump/87231
 
+**Best practices:**
 
-Best practice:
+- `graph_id` should be **stable and unique across time**
+- avoid reusing IDs after relabeling or reprocessing
 
-graph_id should be stable and unique across time
+---
 
-avoid reusing IDs after relabeling or reprocessing
-
-2) x (float)
+### 2) `x` *(float)*
 
 Horizontal axis of the dynamogram curve.
 
-Represents normalized stroke position or displacement
+- Represents normalized stroke position or displacement
+- Recommended range: **[0.0 – 1.0]**
 
-Recommended range: [0.0 – 1.0]
+If not normalized, preprocessing will normalize after resampling.
 
-If not normalized, preprocessing will normalize after resampling
+---
 
-3) y (float)
+### 3) `y` *(float)*
 
 Vertical axis of the dynamogram curve.
 
-Represents load / force / torque proxy
+- Represents load / force / torque proxy
+- Preprocessing normalizes amplitude to preserve **shape invariance**
+- Absolute magnitude is intentionally **not required**
 
-Preprocessing normalizes amplitude to preserve shape invariance
+---
 
-Absolute magnitude is intentionally not required
+### 4) `label` *(string)*
 
-4) label (string)
+Class label assigned to the **entire dynamogram**.
 
-Class label assigned to the entire dynamogram.
+This is a **graph-level label**, repeated across all points belonging to the same `graph_id`.
 
-This is a graph-level label, repeated across all points belonging to the same graph_id.
-
-Examples
-
+#### Examples
 Gas in pump
 Fluid pound
 Flowing throught pump
@@ -92,136 +95,133 @@ Pump wear
 TV leaking
 
 
-⚠️ The pipeline assumes single-label classification per graph, even though multiple physical phenomena may coexist.
+⚠️ **Important assumption:**  
+The pipeline assumes **single-label classification per graph**, even though multiple physical phenomena may coexist.
 
-This reflects how SRP data is labeled in real operations.
+This reflects how SRP data is labeled in **real operations**.
 
-Optional Columns
-point_no (integer)
+---
+
+## Optional Columns
+
+### `point_no` *(integer)*
 
 Optional point ordering index.
 
-If present → points are sorted by point_no
+- If present → points are sorted by `point_no`
+- If absent → points are sorted by `x`
 
-If absent → points are sorted by x
+**Recommended when:**
 
-Recommended when:
+- original sampling is irregular
+- data originates from image digitization
+- multiple resampling passes are expected
 
-original sampling is irregular,
+---
 
-data originates from image digitization,
-
-multiple resampling passes are expected.
-
-Graph-Level Constraints
+## Graph-Level Constraints
 
 To ensure stable training and inference:
 
-Each graph_id should contain at least 50 points
-(more points improve resampling stability)
+- Each `graph_id` should contain **at least 50 points**  
+  (more points improve resampling stability)
 
-No missing values in:
+- No missing values are allowed in:
+  - `graph_id`
+  - `x`
+  - `y`
+  - `label`
 
-graph_id
+- Each `graph_id` must map to **exactly one label**
 
-x
+---
 
-y
+## Label Quality & Industrial Reality
 
-label
-
-Each graph_id must map to exactly one label
-
-Label Quality & Industrial Reality
-
-SRP dynamogram labels in operational datasets are not ground truth in a strict physical sense.
+SRP dynamogram labels in operational datasets are **not ground truth** in a strict physical sense.
 
 Common sources of ambiguity include:
 
-simultaneous failure mechanisms (e.g. Gas + Fluid Pound),
+- simultaneous failure mechanisms (e.g. *Gas + Fluid Pound*)
+- transitional operating regimes
+- subjective expert interpretation
+- historical label drift
 
-transitional operating regimes,
-
-subjective expert interpretation,
-
-historical label drift.
-
-This dataset specification does not attempt to eliminate these ambiguities.
+This dataset specification **does not attempt to eliminate these ambiguities**.
 
 Instead, the modeling pipeline is designed to:
 
-remain robust under label noise,
+- remain robust under label noise
+- surface uncertainty through **Top-2 predictions**
+- support **expert-in-the-loop** review
 
-surface uncertainty through Top-2 predictions,
+> This is a deliberate **industrial design choice**, not a limitation.
 
-support expert-in-the-loop review.
+---
 
-This is a deliberate industrial design choice, not a limitation.
+## Class Imbalance Considerations
 
-Class Imbalance Considerations
+Operational SRP datasets are typically **highly imbalanced**:
 
-Operational SRP datasets are typically highly imbalanced:
+- normal / flowing conditions dominate
+- severe failures are rare
+- tagging-related events are often underrepresented
 
-    normal or flowing conditions dominate,
+The training pipeline therefore includes:
 
-    severe failures are rare,
+- graph-level stratified splitting
+- class-weighted loss functions
+- macro-F1 evaluation metrics
 
-    tagging-related events may be underrepresented.
+⚠️ Users are strongly discouraged from oversampling or synthetic balancing **without domain validation**.
 
-    The training pipeline therefore includes:
+---
 
-    graph-level stratified splitting,
+## Train / Validation / Test Splitting
 
-    class-weighted loss functions,
+All dataset splits are performed **at the graph level**:
 
-    macro-F1 evaluation metrics.
+- no points from the same `graph_id` appear in multiple sets
+- leakage between train and test is fully avoided
+- generalization reflects **real deployment conditions**
 
-Users are strongly discouraged from oversampling or synthetic balancing without domain validation.
+> This is **non-negotiable** for industrial ML.
 
-Train / Validation / Test Splitting
+---
 
-All splits are performed at the graph level:
-
-    no points from the same graph_id appear in multiple sets,
-
-    leakage between train and test is fully avoided,
-
-    generalization reflects real deployment conditions.
-
-This is non-negotiable for industrial ML.
-
-Recommended Production Usage
+## Recommended Production Usage
 
 For real-world deployment and expert workflows:
 
-    Use Top-2 predictions with probabilities, not Top-1 only
+- use **Top-2 predictions with probabilities**, not Top-1 only
+- define confidence thresholds for automatic vs. manual review
+- route low-margin cases to expert validation
+- monitor class-level confusion over time
 
-    Define confidence thresholds for automatic vs manual review
+This dataset format is designed to support **all of the above**.
 
-    Route low-margin cases to expert validation
+---
 
-    Monitor class-level confusion over time
+## Example (Simplified)
 
-This dataset format is designed to support all of the above.
-
-Example (Simplified)
+```csv
 graph_id,x,y,label
 2. Gas in pump/10032,0.00,0.12,Gas in pump
 2. Gas in pump/10032,0.01,0.18,Gas in pump
 2. Gas in pump/10032,0.02,0.25,Gas in pump
 ...
 
-Key Takeaway
+## Key Takeaway
 
 This dataset specification is built for industrial diagnostics, not academic benchmarks.
 
 It prioritizes:
 
-    robustness over perfection,
+    robustness over perfection
 
-    interpretability over cosmetic metrics,
+    interpretability over cosmetic metrics
 
-    and practical decision support over theoretical purity.
+    practical decision support over theoretical purity
 
 Disclaimer
 
