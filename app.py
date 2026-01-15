@@ -127,9 +127,10 @@ def _github_download_file(repo_full: str, path_in_repo: str, token: str) -> byte
     return base64.b64decode(content_b64)
 
 
-def ensure_private_artifacts(local_run_dir: str):
+def ensure_private_artifacts(local_run_dir: str) -> bool:
     """
     Ensure model artifacts exist locally by downloading them from a private GitHub repo.
+    Returns True if artifacts were downloaded, False if already cached.
     """
     token = st.secrets.get("GITHUB_TOKEN", None)
     repo = st.secrets.get("PRIVATE_REPO", None)
@@ -147,14 +148,19 @@ def ensure_private_artifacts(local_run_dir: str):
     local_pt = run_dir / "best_hybrid7.pt"
     local_npz = run_dir / "feature_scaler.npz"
 
-    # Download only if missing
+    downloaded = False
+
     if not local_pt.exists():
         blob = _github_download_file(repo, pt_path, token)
         local_pt.write_bytes(blob)
+        downloaded = True
 
     if not local_npz.exists():
         blob = _github_download_file(repo, npz_path, token)
         local_npz.write_bytes(blob)
+        downloaded = True
+
+    return downloaded
 
 
 # ============================================================
@@ -340,11 +346,22 @@ if not graph_ids:
 
 # Load model
 try:
-    ensure_private_artifacts(run_dir)
-    model, class_names, scaler, ckpt_path, device, device_str = load_model(run_dir, device_str)
+    with st.spinner("Downloading model artifacts..."):
+        downloaded = ensure_private_artifacts(run_dir)
+
+    if downloaded:
+        st.caption("Model artifacts downloaded and cached locally.")
+    else:
+        st.caption("Using cached model artifacts.")
+
+    model, class_names, model_type, ckpt_path, device_str = load_model(
+        run_dir, device_str=device_str
+    )
+
 except Exception as e:
     st.error(f"Failed to load model: {e}")
     st.stop()
+
 
 
 st.caption(f"Loaded checkpoint: `{ckpt_path}`")
