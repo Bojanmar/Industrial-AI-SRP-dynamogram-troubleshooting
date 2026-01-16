@@ -20,11 +20,12 @@ It demonstrates how machine learning can be made **usable, explainable, and trus
 ---
 ## Live Demo
 
-🔗 **Streamlit Demo:**  
-https://<your-streamlit-app>.streamlit.app
+🔗 **Interactive Streamlit Demo**  
+https://industrial-ai-srp-dynamogram-troubleshooting-xlhcdmwspzgqzc423.streamlit.app/
 
-The demo allows interactive inspection of individual SRP dynamograms,
+The live demo allows interactive inspection of individual SRP dynamograms,
 Top-2 predictions, and confidence-aware diagnostic behavior.
+
 
 ## Quickstart (Local)
 
