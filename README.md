@@ -163,6 +163,45 @@ Both approaches achieve **similar aggregate metrics**, but:
 - single-label models offer **clearer Top-2 decision behavior**.
 
 ---
+## Production Decision Policy (Single → Multi Fallback)
+
+While both single-label and multi-label hybrid models are valuable,  
+**industrial deployment requires a clear and stable operator-facing behavior**.
+
+For this reason, the system follows a **confidence-aware, two-stage decision policy**:
+
+### Stage 1 — Primary Inference (Single-Label Hybrid)
+
+- A **single-label Hybrid-7 model** performs the primary classification.
+- If the Top-1 prediction confidence exceeds a predefined threshold (e.g. **90%**),
+  the result is considered **operationally reliable** and returned directly.
+- This covers the majority of well-defined operating regimes.
+
+### Stage 2 — Ambiguity Resolution (Multi-Label Hybrid)
+
+- If Top-1 confidence falls below the threshold, the case is treated as **ambiguous**.
+- In such cases, a **multi-label hybrid model** is activated to better capture
+  overlapping or transitional failure mechanisms.
+- Internally, multi-label probabilities are evaluated, but the system still
+  produces **one consistent diagnostic output**.
+
+### Key Industrial Principle
+
+> **The operator never interacts with multiple models.**  
+> Model switching is an internal mechanism designed to improve reliability,
+> not to increase cognitive load.
+
+### Engineering Rationale
+
+This strategy ensures:
+
+- stable and predictable UI behavior,
+- reduced false certainty in ambiguous regimes,
+- alignment with real SRP diagnostic workflows,
+- clear accountability in operational decision-making.
+
+This is a **production decision system**, not a benchmark comparison between models.
+
 
 ## Tabular (Feature-Only) Models — Baseline Analysis
 

@@ -1,8 +1,10 @@
 # ============================================================
 # SRP Dynamogram Diagnostic Demo (Streamlit)
 # Decision regime:
-#   1) Single-label hybrid7 (softmax) used when confident
-#   2) If ambiguous (p1 < threshold), switch to multi-label hybrid7 (sigmoid)
+#   - run SINGLE first
+#   - if p1 >= threshold -> show SINGLE
+#   - else -> run MULTI and show MULTI
+# Hybrid CNN + 7 Engineered Features
 # ============================================================
 
 import os
@@ -19,7 +21,6 @@ import base64
 import requests
 from pathlib import Path
 import hashlib
-
 
 # --- allow imports from src/ ---
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -39,8 +40,7 @@ st.set_page_config(page_title="SRP Dynamogram Diagnostic Demo", layout="wide")
 
 st.title("SRP Dynamogram Diagnostic Inference")
 st.caption(
-    "Industrial AI demo for SRP dynamogram diagnostics using Hybrid CNN + 7 domain-engineered features, "
-    "with a production-style decision regime (single → multi on ambiguity)."
+    "Industrial AI demo for SRP dynamogram diagnostics using a Hybrid CNN + 7 domain-engineered features."
 )
 
 with st.expander("ℹ️ What this demo shows / does not show", expanded=True):
@@ -50,12 +50,11 @@ with st.expander("ℹ️ What this demo shows / does not show", expanded=True):
 - End-to-end inference on SRP-like dynamogram data (tabular long format)
 - Resampling + normalization for shape robustness
 - Hybrid model: CNN shape encoder + 7 physics-informed engineered features
-- **Top-2 predictions with a production decision regime**
-  - use **single-label** model when confident
-  - fallback to **multi-label** model when ambiguous
+- **Decision regime:** single-label when confident, multi-label when ambiguous
+- **Top-2 ranking** for decision support
 
 **This demo does NOT show**
-- Proprietary field datasets or production weights beyond the demo artifact
+- Proprietary field datasets or production weights
 - Full-scale training runs
 - Real-time deployment infrastructure
 
@@ -95,7 +94,6 @@ def get_curve(df: pd.DataFrame, graph_id: str) -> Tuple[np.ndarray, np.ndarray]:
     if g.empty:
         raise ValueError(f"No data found for graph_id = {graph_id}")
 
-    # preserve ordering if available
     if "point_no" in g.columns:
         g = g.sort_values("point_no")
     else:
@@ -105,7 +103,6 @@ def get_curve(df: pd.DataFrame, graph_id: str) -> Tuple[np.ndarray, np.ndarray]:
 
 
 def short_file_hash(path: str, n: int = 8) -> str:
-    """Return short SHA256 hash of a file (first n chars)."""
     h = hashlib.sha256()
     with open(path, "rb") as f:
         for chunk in iter(lambda: f.read(8192), b""):
@@ -114,13 +111,9 @@ def short_file_hash(path: str, n: int = 8) -> str:
 
 
 # ============================================================
-# Private GitHub artifacts download
+# GitHub private artifacts download
 # ============================================================
 def _github_download_file(repo_full: str, path_in_repo: str, token: str) -> bytes:
-    """
-    Download a file from a private GitHub repo via the Contents API.
-    Returns raw bytes.
-    """
     url = f"https://api.github.com/repos/{repo_full}/contents/{path_in_repo}"
     headers = {
         "Authorization": f"token {token}",
@@ -144,14 +137,13 @@ def _github_download_file(repo_full: str, path_in_repo: str, token: str) -> byte
     return base64.b64decode(data["content"])
 
 
-def ensure_private_artifacts(local_run_dir: str) -> bool:
+def ensure_private_artifacts_dual(local_run_dir: str) -> bool:
     """
-    Ensure artifacts exist locally by downloading them from a private GitHub repo.
-    Downloads:
-      - best_hybrid7.pt (single-label)
-      - best_hybrid7_multilabel.pt (multi-label)
+    Downloads BOTH single + multi checkpoints + scaler into local_run_dir (cached).
+    Local filenames are fixed:
+      - best_hybrid7.pt
+      - best_hybrid7_multilabel.pt
       - feature_scaler.npz
-    Returns True if something was downloaded, False if already cached.
     """
     token = st.secrets.get("GITHUB_TOKEN", None)
     repo = st.secrets.get("PRIVATE_REPO", None)
@@ -161,9 +153,7 @@ def ensure_private_artifacts(local_run_dir: str) -> bool:
     npz_path = st.secrets.get("SCALER_NPZ_PATH", "feature_scaler.npz")
 
     if not token or not repo:
-        raise RuntimeError(
-            "Missing Streamlit Secrets. Please set GITHUB_TOKEN and PRIVATE_REPO in Streamlit Secrets."
-        )
+        raise RuntimeError("Missing Streamlit Secrets: GITHUB_TOKEN and/or PRIVATE_REPO.")
 
     run_dir = Path(local_run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -175,18 +165,15 @@ def ensure_private_artifacts(local_run_dir: str) -> bool:
     downloaded = False
 
     if not local_single.exists():
-        blob = _github_download_file(repo, single_pt_path, token)
-        local_single.write_bytes(blob)
+        local_single.write_bytes(_github_download_file(repo, single_pt_path, token))
         downloaded = True
 
     if not local_multi.exists():
-        blob = _github_download_file(repo, multi_pt_path, token)
-        local_multi.write_bytes(blob)
+        local_multi.write_bytes(_github_download_file(repo, multi_pt_path, token))
         downloaded = True
 
     if not local_npz.exists():
-        blob = _github_download_file(repo, npz_path, token)
-        local_npz.write_bytes(blob)
+        local_npz.write_bytes(_github_download_file(repo, npz_path, token))
         downloaded = True
 
     return downloaded
@@ -196,20 +183,13 @@ def ensure_private_artifacts(local_run_dir: str) -> bool:
 # Model loading
 # ============================================================
 @st.cache_resource
-def load_model_single(run_dir: str, device_str: str):
-    ckpt_path = os.path.join(run_dir, "best_hybrid7.pt")
-    scaler_path = os.path.join(run_dir, "feature_scaler.npz")
-
-    if not os.path.isfile(ckpt_path):
-        raise FileNotFoundError(f"Expected best_hybrid7.pt in: {run_dir}")
-    if not os.path.isfile(scaler_path):
-        raise FileNotFoundError(f"Expected feature_scaler.npz in: {run_dir}")
-
+def load_model_from_ckpt(ckpt_path: str, scaler_path: str, device_str: str):
     if device_str == "cuda" and not torch.cuda.is_available():
         device_str = "cpu"
     device = torch.device(device_str)
 
     ckpt = torch.load(ckpt_path, map_location=device)
+
     class_names = ckpt.get("label_classes", None)
     if class_names is None:
         raise ValueError("Checkpoint missing 'label_classes'.")
@@ -224,50 +204,18 @@ def load_model_single(run_dir: str, device_str: str):
     model.to(device).eval()
 
     scaler = np.load(scaler_path)
-    return model, class_names, scaler, ckpt_path, device
-
-
-@st.cache_resource
-def load_model_multi(run_dir: str, device_str: str):
-    ckpt_path = os.path.join(run_dir, "best_hybrid7_multilabel.pt")
-    scaler_path = os.path.join(run_dir, "feature_scaler.npz")
-
-    if not os.path.isfile(ckpt_path):
-        raise FileNotFoundError(f"Expected best_hybrid7_multilabel.pt in: {run_dir}")
-    if not os.path.isfile(scaler_path):
-        raise FileNotFoundError(f"Expected feature_scaler.npz in: {run_dir}")
-
-    if device_str == "cuda" and not torch.cuda.is_available():
-        device_str = "cpu"
-    device = torch.device(device_str)
-
-    ckpt = torch.load(ckpt_path, map_location=device)
-    class_names = ckpt.get("label_classes", None)
-    if class_names is None:
-        raise ValueError("Checkpoint missing 'label_classes'.")
-    class_names = [str(c).strip() for c in class_names]
-
-    model = HybridModel(
-        n_classes=len(class_names),
-        n_feat=7,
-        dropout=float(ckpt.get("args", {}).get("dropout", 0.2)),
-    )
-    model.load_state_dict(ckpt["model_state"])
-    model.to(device).eval()
-
-    scaler = np.load(scaler_path)
-    return model, class_names, scaler, ckpt_path, device
+    return model, class_names, scaler, device
 
 
 # ============================================================
 # Inference helpers
 # ============================================================
-def _prep_inputs(
+def _make_inputs(
+    scaler,
     x: np.ndarray,
     y: np.ndarray,
-    scaler,
-    n_points: int,
     device: torch.device,
+    n_points: int,
 ):
     x_res, y_res = resample_curve(x, y, n_points=n_points)
     x_res, y_res = normalize_xy(x_res, y_res)
@@ -276,13 +224,28 @@ def _prep_inputs(
     xb = torch.from_numpy(X).unsqueeze(0).to(device=device, dtype=torch.float32)
 
     feat = compute_features_7(x_res, y_res).astype(np.float32).reshape(1, -1)
+
     mu = np.asarray(scaler["mean"]).reshape(1, -1)
     sd = np.asarray(scaler["std"]).reshape(1, -1)
     sd = np.where(sd < 1e-8, 1.0, sd)
+
     feat_s = (feat - mu) / sd
     fb = torch.from_numpy(feat_s).to(device=device, dtype=torch.float32)
 
     return xb, fb
+
+
+def _top2_from_scores(class_names: List[str], scores: np.ndarray) -> Dict[str, Any]:
+    order = np.argsort(-scores)
+    i1, i2 = int(order[0]), int(order[1])
+    return {
+        "scores": scores,
+        "pred1_label": class_names[i1],
+        "pred1_prob": float(scores[i1]),
+        "pred2_label": class_names[i2],
+        "pred2_prob": float(scores[i2]),
+        "margin": float(scores[i1] - scores[i2]),
+    }
 
 
 def predict_single(
@@ -292,24 +255,15 @@ def predict_single(
     x: np.ndarray,
     y: np.ndarray,
     device: torch.device,
-    n_points: int = 512,
+    n_points: int,
 ) -> Dict[str, Any]:
-    xb, fb = _prep_inputs(x, y, scaler, n_points, device)
+    xb, fb = _make_inputs(scaler, x, y, device, n_points)
     with torch.no_grad():
         logits = model(xb, fb)
         probs = torch.softmax(logits, dim=1).detach().cpu().numpy().reshape(-1)
-
-    order = np.argsort(-probs)
-    i1, i2 = int(order[0]), int(order[1])
-    return {
-        "mode": "single",
-        "scores": probs,
-        "pred1_label": class_names[i1],
-        "pred1_score": float(probs[i1]),
-        "pred2_label": class_names[i2],
-        "pred2_score": float(probs[i2]),
-        "margin": float(probs[i1] - probs[i2]),
-    }
+    out = _top2_from_scores(class_names, probs)
+    out["mode"] = "single"
+    return out
 
 
 def predict_multi(
@@ -319,24 +273,15 @@ def predict_multi(
     x: np.ndarray,
     y: np.ndarray,
     device: torch.device,
-    n_points: int = 512,
+    n_points: int,
 ) -> Dict[str, Any]:
-    xb, fb = _prep_inputs(x, y, scaler, n_points, device)
+    xb, fb = _make_inputs(scaler, x, y, device, n_points)
     with torch.no_grad():
         logits = model(xb, fb)
-        scores = torch.sigmoid(logits).detach().cpu().numpy().reshape(-1)
-
-    order = np.argsort(-scores)
-    i1, i2 = int(order[0]), int(order[1])
-    return {
-        "mode": "multi",
-        "scores": scores,
-        "pred1_label": class_names[i1],
-        "pred1_score": float(scores[i1]),
-        "pred2_label": class_names[i2],
-        "pred2_score": float(scores[i2]),
-        "margin": float(scores[i1] - scores[i2]),
-    }
+        probs = torch.sigmoid(logits).detach().cpu().numpy().reshape(-1)
+    out = _top2_from_scores(class_names, probs)
+    out["mode"] = "multi"
+    return out
 
 
 # ============================================================
@@ -354,7 +299,11 @@ def plot_dynamogram(x: np.ndarray, y: np.ndarray, title: str = ""):
     plt.close(fig)
 
 
-def bar_top2(labels: List[str], vals: List[float], title: str):
+def prob_bar_top2(class_names: List[str], scores: np.ndarray, title: str):
+    order = np.argsort(-scores)[:2]
+    labels = [class_names[i] for i in order]
+    vals = [float(scores[i]) for i in order]
+
     fig = plt.figure(figsize=(6, 2.2))
     plt.barh(labels[::-1], vals[::-1])
     plt.xlabel("Score")
@@ -362,14 +311,6 @@ def bar_top2(labels: List[str], vals: List[float], title: str):
     plt.xlim(0, 1.0)
     st.pyplot(fig)
     plt.close(fig)
-
-
-def prob_bar_top2(class_names: List[str], scores: np.ndarray, mode: str):
-    order = np.argsort(-scores)[:2]
-    labels = [class_names[i] for i in order]
-    vals = [float(scores[i]) for i in order]
-    title = "Top probabilities (Top-2)" if mode == "single" else "Top scores (Top-2, multi-label)"
-    bar_top2(labels, vals, title)
 
 
 # ============================================================
@@ -387,7 +328,7 @@ with st.sidebar:
     run_dir = st.text_input(
         "Local cache folder (results/...)",
         value=os.path.join("results", "hybrid7_final_v1"),
-        help="This folder is used only as a local cache for downloaded artifacts.",
+        help="Artifacts are downloaded here and cached.",
     )
 
     device_str = st.selectbox("Device", ["cpu", "cuda"], index=0)
@@ -405,13 +346,13 @@ with st.sidebar:
     )
 
     st.header("Step 3 – Decision regime")
-    p_strong = st.slider(
+    threshold = st.slider(
         "Single-model confidence threshold (p1)",
         0.50,
         0.99,
         0.90,
         0.01,
-        help="If single-label Top-1 probability is below this threshold, the app switches to multi-label model (mixed-regime mode).",
+        help="If single-label Top-1 confidence is below this threshold, the app switches to multi-label for ambiguity handling.",
     )
 
     st.markdown("---")
@@ -437,6 +378,37 @@ if not graph_ids:
     st.error("No graph_id values found in the uploaded CSV.")
     st.stop()
 
+# Download + load BOTH models
+try:
+    with st.spinner("Downloading model artifacts..."):
+        downloaded = ensure_private_artifacts_dual(run_dir)
+
+    st.caption("Model artifacts downloaded and cached locally." if downloaded else "Using cached model artifacts.")
+
+    single_ckpt = os.path.join(run_dir, "best_hybrid7.pt")
+    multi_ckpt = os.path.join(run_dir, "best_hybrid7_multilabel.pt")
+    scaler_path = os.path.join(run_dir, "feature_scaler.npz")
+
+    if not os.path.isfile(single_ckpt):
+        raise FileNotFoundError(f"Missing single checkpoint: {single_ckpt}")
+    if not os.path.isfile(multi_ckpt):
+        raise FileNotFoundError(f"Missing multi checkpoint: {multi_ckpt}")
+    if not os.path.isfile(scaler_path):
+        raise FileNotFoundError(f"Missing scaler: {scaler_path}")
+
+    model_single, classes_single, scaler, device = load_model_from_ckpt(single_ckpt, scaler_path, device_str)
+    model_multi, classes_multi, _, _ = load_model_from_ckpt(multi_ckpt, scaler_path, device_str)
+
+    hash_single = short_file_hash(single_ckpt)
+    hash_multi = short_file_hash(multi_ckpt)
+
+except Exception as e:
+    st.error(f"Failed to load model(s): {e}")
+    st.stop()
+
+st.caption(f"Artifacts cache: `{run_dir}`")
+st.caption(f"Single checkpoint: `{os.path.basename(single_ckpt)}` · Multi checkpoint: `{os.path.basename(multi_ckpt)}`")
+
 # Layout
 col_left, col_right = st.columns([1, 2], gap="large")
 
@@ -445,90 +417,69 @@ with col_left:
     selected_id = st.selectbox("graph_id", graph_ids, index=0)
     st.caption("Single-graph inference (interactive demo).")
 
-# Get curve
+# Inference + decision regime
 try:
     x, y = get_curve(df, selected_id)
-except Exception as e:
-    st.error(f"Failed to read curve for graph_id={selected_id}: {e}")
-    st.stop()
 
-# Download + load both models
-try:
-    with st.spinner("Downloading model artifacts (private repo)..."):
-        downloaded = ensure_private_artifacts(run_dir)
-
-    if downloaded:
-        st.caption("Model artifacts downloaded and cached locally.")
-    else:
-        st.caption("Using cached model artifacts.")
-
-    single_model, class_names_s, scaler, ckpt_single, device = load_model_single(run_dir, device_str)
-    multi_model, class_names_m, scaler2, ckpt_multi, device2 = load_model_multi(run_dir, device_str)
-
-    if class_names_s != class_names_m:
-        raise RuntimeError("Class list mismatch between single and multi checkpoints.")
-except Exception as e:
-    st.error(f"Failed to load models: {e}")
-    st.stop()
-
-# Inference: decision regime
-try:
     pred_s = predict_single(
-        model=single_model,
+        model=model_single,
         scaler=scaler,
-        class_names=class_names_s,
-        x=x,
-        y=y,
+        class_names=classes_single,
+        x=x, y=y,
         device=device,
         n_points=int(n_points),
     )
 
-    if pred_s["pred1_score"] >= float(p_strong):
-        final = pred_s
-        used = "single"
-        used_ckpt = ckpt_single
+    if float(pred_s["pred1_prob"]) >= float(threshold):
+        pred = pred_s
+        decision_regime = "single (confident)"
+        used_mode = "single-label"
+        used_checkpoint = os.path.basename(single_ckpt)
+        used_hash = hash_single
+        used_classes = classes_single
+        used_scores = pred["scores"]
+        bar_title = "Top scores (Top-2, single-label)"
     else:
         pred_m = predict_multi(
-            model=multi_model,
-            scaler=scaler,  # scaler must match features_7 standardization
-            class_names=class_names_s,
-            x=x,
-            y=y,
-            device=device2,
+            model=model_multi,
+            scaler=scaler,
+            class_names=classes_multi,
+            x=x, y=y,
+            device=device,
             n_points=int(n_points),
         )
-        final = pred_m
-        used = "multi"
-        used_ckpt = ckpt_multi
+        pred = pred_m
+        decision_regime = "multi (ambiguity handling)"
+        used_mode = "multi-label"
+        used_checkpoint = os.path.basename(multi_ckpt)
+        used_hash = hash_multi
+        used_classes = classes_multi
+        used_scores = pred["scores"]
+        bar_title = "Top scores (Top-2, multi-label)"
 
 except Exception as e:
     st.error(f"Inference failed for graph_id={selected_id}: {e}")
     st.stop()
 
-# Extract
-l1, p1 = final["pred1_label"], final["pred1_score"]
-l2, p2 = final["pred2_label"], final["pred2_score"]
-margin = final.get("margin", None)
+l1, p1 = pred["pred1_label"], float(pred["pred1_prob"])
+l2, p2 = pred["pred2_label"], float(pred["pred2_prob"])
+margin = float(pred["margin"])
 
-# Hash for traceability
-model_hash = short_file_hash(used_ckpt)
-
-# Left column: output + top2
+# LEFT
 with col_left:
     st.subheader("Model output")
     st.success(f"**Result:** {l1}  \nScore: **{p1:.2f}**")
 
     st.caption(
-        f"Decision regime: **{used}** · "
-        f"threshold(p1): **{p_strong:.2f}** · "
-        f"version: **{model_hash}**"
+        f"Decision regime: **{decision_regime}** · threshold(p1): **{threshold:.2f}** · "
+        f"mode: **{used_mode}** · version: **{used_hash}**"
     )
-    st.caption(f"Checkpoint: `{os.path.basename(used_ckpt)}`")
+    st.caption(f"Checkpoint: `{used_checkpoint}`")
 
     st.markdown("### Top-2")
-    prob_bar_top2(class_names_s, final["scores"], mode=final["mode"])
+    prob_bar_top2(used_classes, used_scores, title=bar_title)
 
-# Right column: plot + export
+# RIGHT
 with col_right:
     st.subheader("Dynamogram plot")
     plot_dynamogram(x, y, title=f"graph_id: {selected_id}")
@@ -538,20 +489,16 @@ with col_right:
 
     out_row = {
         "graph_id": str(selected_id),
-        "decision_regime": used,  # single or multi
-        "threshold_p1": float(p_strong),
-
+        "decision_regime": decision_regime,
+        "mode": used_mode,
         "pred1_label": l1,
-        "pred1_score": float(p1),
+        "pred1_score": p1,
         "pred2_label": l2,
-        "pred2_score": float(p2),
-        "margin": (float(margin) if margin is not None else None),
-
-        "model_single_ckpt": os.path.basename(ckpt_single),
-        "model_multi_ckpt": os.path.basename(ckpt_multi),
-        "selected_checkpoint": os.path.basename(used_ckpt),
-        "selected_checkpoint_hash": model_hash,
-
+        "pred2_score": p2,
+        "margin": margin,
+        "threshold": float(threshold),
+        "checkpoint": used_checkpoint,
+        "model_version": used_hash,
         "device": device_str,
         "n_points": int(n_points),
     }
