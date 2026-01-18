@@ -8,3 +8,7 @@ torchvision
 torchaudio
 requests
 streamlit
+joblib
+umap-learn
+scikit-learn
+

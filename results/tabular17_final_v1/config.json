@@ -1,0 +1,10 @@
+{
+  "csv_path": "data/final.csv",
+  "feature_mode": "17",
+  "n_points": 512,
+  "min_class_count": 10,
+  "test_size": 0.15,
+  "val_size": 0.15,
+  "seed": 42,
+  "out_dir": "results/tabular17_final_v1"
+}

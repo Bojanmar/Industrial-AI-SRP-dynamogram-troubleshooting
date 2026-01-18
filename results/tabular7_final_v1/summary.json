@@ -1,0 +1,12 @@
+{
+  "run_type": "tabular_baselines",
+  "best_model": "logreg",
+  "feature_mode": "7",
+  "n_classes": 10,
+  "n_graphs_total": 3491,
+  "metrics": {
+    "val_macroF1_best": 0.5933389070206597,
+    "test_macroF1": 0.5285705292377261,
+    "test_accuracy": 0.6603053435114504
+  }
+}

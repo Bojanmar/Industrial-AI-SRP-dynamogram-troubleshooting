@@ -1,57 +1,85 @@
+# =========================
 # Python
+# =========================
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
+# =========================
 # Virtual environment
+# =========================
 .venv/
 
-# Raw / confidential data
+# =========================
+# DATA (confidential)
+# =========================
 
-data/*.parquet
-data/*.npy
+# Ignore everything in data by default
+data/*
 
-# Allow documentation files in data/
+# Allow demo & documentation only
+!data/demo-dataset.csv
 !data/README.md
 !data/schema_example.csv
 
-# Model binaries
+# Explicitly block real datasets
+data/final.csv
+data/*.parquet
+data/*.npy
+data/*.csv~
+
+# =========================
+# RESULTS (models & leakage)
+# =========================
+
+# Block ALL model binaries
 results/**/*.pt
+results/**/*.joblib
 results/**/*scaler*.npz
 
-# Training code (keep private)
-src/train.py
-
-
-# OS
-.DS_Store
-Thumbs.db
-
-# IDE
-.vscode/
-.idea/
-
-# =========================
-# RESULTS - sensitive CSVs
-# =========================
-
-# Ignore prediction outputs and split definitions
+# Block predictions & splits
 results/**/*predictions*.csv
+results/**/*test_predictions*.csv
 results/**/*_ids.csv
 results/**/split_*.csv
 
-# =========================
-# RESULTS - model binaries
-# =========================
-
-results/**/*.pt
-results/**/*scaler*.npz
+# Block aggregate comparison tables if derived from real data
+results/compare_*.csv
 
 # =========================
-# ALLOW key result artifacts
+# ALLOW SAFE RESULT ARTIFACTS
 # =========================
 
+# Metrics & summaries only
 !results/**/metrics.csv
+!results/**/summary.json
 !results/**/feature_names.csv
 !results/**/label_mapping_kept.csv
+
+# Allow embedding visualizations
+!results/embedding_space/
+!results/embedding_space/*.png
+!results/embedding_space/*.jpg
+
+# Embedding numeric outputs (do not expose)
+results/embedding_space/*.csv
+
+# =========================
+# TRAINING CODE (PRIVATE)
+# =========================
+
+# Block ALL training scripts
+src/train_*.py
+
+# =========================
+# OS / IDE
+# =========================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.code-workspace
+
+# Streamlit internal tools
+app2.py

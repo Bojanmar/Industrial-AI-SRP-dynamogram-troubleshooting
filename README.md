@@ -1,37 +1,41 @@
-# SRP Dynamogram Classification
+# SRP Dynamogram Classification  
 ## End-to-End Industrial AI using Hybrid Deep Learning
 
 ---
 
 ## Overview
 
-This repository presents a **full end-to-end industrial AI solution** for classification and diagnosis of **Sucker Rod Pump (SRP) dynamometer cards**, combining:
+This repository presents a **full end-to-end industrial AI solution** for classification and diagnosis of  
+**Sucker Rod Pump (SRP) dynamometer cards**, combining:
 
-- **Deep learning (CNNs)**
+- **Deep learning (1D CNNs)**
 - **Physics-informed, domain-engineered features**
-- **Production-oriented inference logic**
+- **Production-oriented inference and decision logic**
 
-The project is intentionally designed around **real operational constraints**, not idealized academic benchmarks.
+The project is **explicitly designed around real operational constraints**, not idealized academic benchmarks.
 
-It demonstrates how machine learning can be made **usable, explainable, and trustworthy** in industrial environments, where data is noisy, labels are imperfect, and decisions must still be made.
+It demonstrates how machine learning can be made **usable, explainable, and trustworthy** in industrial environments,
+where data is noisy, labels are imperfect, and decisions must still be made.
 
 > **This is not just a model — it is a complete diagnostic pipeline, from raw data to production-ready inference.**
 
 ---
+
+![UMAP – Hybrid CNN embedding space](results/embedding_space/multilabel_hybrid7_umap.png)
+
+
 ## Live Demo
 
 🔗 **Interactive Streamlit Demo**  
 https://industrial-ai-srp-dynamogram-troubleshooting-xlhcdmwspzgqzc423.streamlit.app/
 
-The live demo allows interactive inspection of individual SRP dynamograms,
-Top-2 predictions, and confidence-aware diagnostic behavior.
+The demo enables:
+- interactive inspection of individual SRP dynamograms,
+- side-by-side comparison of trained models,
+- **Top-1 and Top-2 predictions**,
+- confidence-aware diagnostic behavior.
 
-
-## Quickstart (Local)
-
-``bash
-pip install -r requirements.txt
-streamlit r
+---
 
 ## Industrial Problem Context
 
@@ -41,18 +45,20 @@ SRP dynamograms are a core diagnostic tool in oil production, used to identify:
 - fluid pound  
 - mechanical wear  
 - valve leakage  
-- rod/tubing interaction  
+- rod / tubing interaction  
 - normal operating regimes  
+
+### Real Field Constraints
 
 In real field operations:
 
 - multiple failure mechanisms may coexist in a single pump cycle,
-- operating conditions continuously change,
-- historical labels are assigned by experts, often with unavoidable subjectivity.
+- operating conditions continuously evolve,
+- historical labels are assigned by experts and inevitably contain subjectivity.
 
-As a result, **perfect class separation does not exist** in operational data.
+As a result, **perfect class separation does not exist in operational data**.
 
-This repository **explicitly embraces that reality instead of hiding it**.
+This repository **embraces that reality instead of hiding it**.
 
 ---
 
@@ -61,179 +67,203 @@ This repository **explicitly embraces that reality instead of hiding it**.
 > **Effective industrial ML is not about perfect data —  
 > it is about building systems that remain useful despite imperfect data.**
 
-All architectural and modeling choices in this project follow this principle.
+All architectural and modeling decisions in this project follow this principle.
 
 ---
 
 ## End-to-End Project Flow
 
-The repository implements the entire AI lifecycle:
+The repository implements the complete industrial AI lifecycle:
 
 ### 1. Data Ingestion
 - SRP dynamograms stored in long/tabular format  
   (`graph_id`, `x`, `y`, `label`)
 
 ### 2. Signal Preprocessing
-- graph-level grouping  
-- resampling to fixed resolution  
-- normalization for shape robustness  
+- graph-level grouping (no data leakage)
+- resampling to fixed resolution
+- normalization for shape robustness
 
 ### 3. Feature Engineering (Domain-Driven)
-- physically meaningful shape descriptors  
-- symmetry, fill factor, statistical moments  
-- higher-order shape complexity indicators  
+- physically meaningful shape descriptors
+- symmetry and fill-factor metrics
+- statistical moments
+- shape complexity indicators
 
 ### 4. Model Training
-- CNN-only model (signal-based)
+- CNN-only (signal-based baseline)
 - Hybrid CNN + engineered features
+- single-label and multi-label objectives
 - class-weighted loss
-- early stopping
-- reproducible data splits
+- reproducible splits
 
 ### 5. Inference & Decision Logic
-- Top-1 and Top-2 predictions
-- confidence-aware interpretation
-- ambiguity-aware diagnostics
+- Top-1 and **Top-2 predictions**
+- ambiguity-aware interpretation
+- confidence-aware diagnostics
 
 ### 6. Visualization & Validation
-- Streamlit-based UI for expert review
+- Streamlit expert review UI
 - curve inspection
-- probability outputs
+- probability-ranked outputs
+- **embedding-space analysis (UMAP / t-SNE)**
 
-This structure reflects how **industrial AI systems are actually built and deployed**.
+This structure mirrors how **industrial AI systems are actually built, validated, and trusted**.
 
 ---
 
 ## Model Architectures
 
-Three architectures are implemented and evaluated:
-
 ### 1) CNN (Signal-Only Baseline)
 
 - 1D CNN trained directly on normalized dynamogram curves
 - Learns pure shape representations
-- Strong on dominant operational modes
-- Limited robustness for overlapping failure mechanisms
+- Strong on dominant operating regimes
+- Limited robustness in overlapping failure modes
 
 ---
 
-### 2) Hybrid CNN + 7 Engineered Features
+### 2) Hybrid CNN + Engineered Features
 
-- CNN encoder + compact set of physics-inspired features
-- Improved robustness and interpretability
-- Better stability on imbalanced datasets
+CNN shape encoder combined with physics-informed features.
 
----
+Two variants are implemented:
 
-### 3) Hybrid CNN + 17 Engineered Features (Production Model)
+- **Hybrid-7**: compact, robust, production-friendly  
+- **Hybrid-17**: extended, higher expressiveness  
 
-Extended feature set including:
-
-- higher-order statistics
-- asymmetry metrics
-- shape complexity indicators
-- low-frequency spectral components
-
-This model provides the **best balance between accuracy, macro-F1, and practical usability**.
+**Benefits:**
+- improved stability on imbalanced data,
+- better interpretability,
+- improved ambiguity handling.
 
 ---
 
-## Why Hybrid Modeling Matters
+## Single-Label vs Multi-Label Hybrid Models
 
-Pure deep learning models tend to:
+### Single-Label (Softmax)
 
-- overfit dominant regimes,
-- struggle with minority or mixed failure modes,
-- behave unpredictably on ambiguous samples.
+- Assumes one dominant failure mode per pump cycle
+- Outputs normalized class probabilities
+- Clear ranking and simpler interpretation
+- Well-suited for production decision support
 
-By injecting domain knowledge explicitly:
+### Multi-Label (Sigmoid)
 
-- the model becomes more stable,
-- predictions become easier to interpret,
-- failure cases are easier to reason about.
+- Allows multiple simultaneous failure mechanisms
+- Outputs independent probabilities per class
+- Better reflects physical reality in mixed regimes
 
-This hybrid approach reflects how **experienced production engineers actually think** when analyzing dynamograms.
+**Key observation:**
 
----
+Both approaches achieve **similar aggregate metrics**, but:
 
-## Label Ambiguity & Industrial Reality
-
-Certain SRP conditions (e.g. *Fluid Pound*, *Gas in Pump*, *Rod Tagging*) are physically overlapping phenomena.
-
-In real operations:
-
-- they may appear simultaneously,
-- transitions are continuous rather than discrete,
-- expert labels reflect dominant interpretation, not strict ground truth.
+- multi-label models produce **smoother, more continuous embedding spaces**,
+- transitional regimes are represented more naturally,
+- single-label models offer **clearer Top-2 decision behavior**.
 
 ---
 
-## Important Design Choice
+## Tabular (Feature-Only) Models — Baseline Analysis
 
-Instead of aggressively cleaning or merging labels to artificially boost metrics, this project:
+Classical ML models trained **only on engineered features**, without access to raw signal shape:
 
-- preserves label imperfections,
-- evaluates model behavior under realistic ambiguity,
-- prioritizes robustness and transparency over cosmetic scores.
+- Logistic Regression
+- Random Forest
+- Extra Trees
+- Histogram Gradient Boosting
 
-> Lower metrics on some minority classes are therefore a reflection of **physical reality**, not a modeling failure.
+### Purpose
+
+Tabular models are included to:
+
+- establish a lower-bound baseline,
+- isolate the value of raw signal shape,
+- validate that hybrid gains are structural, not cosmetic.
+
+### Observed Behavior
+
+Tabular models consistently show:
+
+- lower accuracy and macro-F1,
+- weak separation of overlapping regimes,
+- unstable Top-2 rankings,
+- poor robustness on transitional samples.
+
+### Engineering Conclusion
+
+Tabular models serve as **diagnostic baselines only** and are **not suitable for production SRP diagnostics**.
+
+This confirms that **SRP diagnosis cannot be reduced to static feature vectors alone**.
+
+---
+
+## Embedding Space Analysis (UMAP / t-SNE)
+
+To validate representation quality beyond metrics, CNN embedding vectors are visualized using **UMAP and t-SNE**.
+
+### Observations
+
+- single-label hybrids form **compact but rigid clusters**
+- multi-label hybrids produce **continuous manifolds**
+- transitional regimes occupy intermediate embedding regions
+- rare failure modes remain separable but closer to dominant regimes
+
+This confirms that the models learn **physically meaningful latent representations**, not artificial class boundaries.
+
+**Embedding continuity directly supports Top-2 decision regimes in production.**
 
 ---
 
 ## Inference Strategy (Production-Critical)
 
-A key outcome of this project is the realization that:
+A key insight from this work:
 
 > **Top-2 predictions are often more valuable than Top-1 predictions in SRP diagnostics.**
 
-The selected production model (`hybrid7_final_v1`) consistently shows that:
+### Why Top-2 Matters
 
-- ambiguous cases are surfaced as competing failure modes,
-- engineers resolve uncertainty faster using probability-ranked outputs,
-- overall decision quality improves even if single-class metrics decrease.
+- real failures overlap physically,
+- forcing a single class hides uncertainty,
+- engineers reason comparatively, not categorically.
 
-This is exactly how **industrial decision-support systems should behave**.
+The system is therefore designed to:
 
----
-
-## Results Summary (Representative)
-
-| Model | Accuracy | Macro-F1 |
-|------|----------|----------|
-| CNN | ~0.77 | ~0.65 |
-| Hybrid (7 features) | ~0.83 | ~0.66 |
-| Hybrid (17 features) | ~0.81 | ~0.74 |
-
-The **Hybrid-17 model** achieves the best overall balance,  
-while **Hybrid-7** often performs best in practical inference scenarios due to clearer Top-2 behavior.
+- always surface Top-2 hypotheses,
+- expose confidence gaps,
+- support expert judgment instead of replacing it.
 
 ---
 
-## Streamlit Diagnostic Interface
+## Final Metric Comparison (Representative)
 
-The repository includes a Streamlit application that enables:
-
-- selection of individual dynamograms,
-- curve visualization,
-- Top-1 and Top-2 prediction inspection,
-- probability-based interpretation.
-
-This bridges the gap between **ML output and engineering judgment**, which is essential for production adoption.
+| Model | Input | Accuracy | Macro-F1 | Production Suitability |
+|------|------|----------|----------|------------------------|
+| Tabular | Features only | ~0.70 | ~0.60 | ❌ No |
+| CNN | Signal only | ~0.77 | ~0.65 | ⚠️ Limited |
+| Hybrid-7 (single) | Signal + features | ~0.83 | ~0.66 | ✅ Yes |
+| Hybrid-17 (single) | Signal + features | ~0.81 | ~0.74 | ✅ Yes |
+| Hybrid-7 (multi) | Signal + features | ~0.82 | ~0.68 | ✅ Yes |
 
 ---
 
-## Reproducibility & Engineering Quality
+## Final Production Model Choice
 
-The pipeline includes:
+**Selected production model:**  
+**Hybrid-7 (single-label) with Top-2 inference**
 
-- graph-level train/validation/test splits (no leakage),
-- fixed random seeds,
-- saved label mappings,
-- stored feature scalers,
-- checkpointed best models,
-- fully logged metrics.
+### Justification
 
-Results are **auditable and reproducible**, which is mandatory for industrial AI.
+- best balance between accuracy, robustness, and interpretability,
+- stable Top-2 behavior across ambiguous regimes,
+- lower complexity than Hybrid-17 with comparable diagnostic quality,
+- clearer decision surfaces for engineers,
+- easier operational deployment and maintenance.
+
+Multi-label models remain highly valuable for:
+- exploratory analysis,
+- embedding inspection,
+- future hierarchical or expert-in-the-loop extensions.
 
 ---
 
@@ -244,24 +274,20 @@ This repository demonstrates the ability to:
 - deeply understand SRP physics and diagnostics,
 - design ML systems around real operational constraints,
 - integrate domain knowledge into neural architectures,
-- build end-to-end AI pipelines (not isolated models),
-- communicate limitations honestly and clearly.
+- build complete end-to-end AI pipelines,
+- communicate limitations transparently and responsibly.
 
-> This is the difference between **academic ML** and **industrial AI**.
+> **This is the difference between academic ML and industrial AI.**
 
 ---
 
 ## Future Production-Oriented Extensions
 
-Potential next steps include:
-
-- hierarchical or multi-label classification,
-- uncertainty thresholds and abstention logic,
-- expert-in-the-loop learning,
-- integration with real-time well monitoring systems,
-- deployment as a diagnostic microservice.
-
-These are **system-level decisions**, not simple model tweaks.
+- decision thresholds and abstention logic
+- hierarchical diagnostics
+- expert-in-the-loop feedback
+- real-time well monitoring integration
+- deployment as a diagnostic microservice
 
 ---
 
@@ -271,41 +297,34 @@ These are **system-level decisions**, not simple model tweaks.
 PhD – Petroleum Engineering  
 
 **Focus:**  
-Production Engineering · Artificial Lift · AI/ML · Digital Oilfield
+Production Engineering · Artificial Lift · Industrial AI · Digital Oilfield
 
-Developed by an oil & gas production technology professional with extensive experience in SRP diagnostics, field operations, and applied machine learning.
+Developed by an oil & gas production technology professional with extensive experience in SRP diagnostics,
+field operations, and applied machine learning.
 
 ---
 
 ## Disclaimer
 
-All modeling concepts, feature definitions, and system-level design choices in this repository are the original work of **Bojan Martinović**.  
-Use of this code or trained models requires clear attribution to the original author as defined by the Apache License 2.0.
+All modeling concepts, feature definitions, and system-level design choices in this repository are the
+original work of **Bojan Martinović**.
 
-### What Is Intentionally Not Included
+---
 
-This repository does **not** include:
+## What Is Intentionally Not Included
 
-- raw dynamogram datasets,
-- labeled production field data,
-- model prediction outputs on proprietary samples,
-- train/validation/test split identifiers,
-- production-trained model weights.
+- proprietary SRP datasets  
+- labeled production field data  
+- trained production model weights  
+- train/validation/test split identifiers  
 
 ### Rationale
 
-SRP dynamogram data originates from real oilfield operations and is subject to:
+Industrial SRP data is subject to confidentiality and IP constraints.
 
-- confidentiality agreements,
-- intellectual property constraints,
-- operational security requirements.
+All methodology, code, and pipelines are fully provided and reproducible on compliant datasets,
+which reflects standard **industrial AI practice**.
 
-### Reproducibility
+> Internal benchmarking tools and training pipelines are intentionally excluded
+> to protect proprietary workflows and intellectual property.
 
-All code, preprocessing logic, feature definitions, and training pipelines are fully provided.  
-The system can be reproduced on any dataset following the documented schema.
-
-This reflects standard **industrial AI practices**, where:
-
-- methodology is shared,
-- data ownership is protected.

@@ -50,3 +50,14 @@ class HybridModel(nn.Module):
         f = self.feat_net(x_feat)
         h = torch.cat([z, f], dim=1)
         return self.classifier(h)
+    
+    def forward_embedding(self, x_sig):
+        """
+        Returns CNN-only embedding (shape representation).
+        x_sig: [B, 2, N]
+        """
+        z = self.cnn(x_sig)
+        z = self.cnn_pool(z)
+        z = self.cnn_fc(z)
+        return z
+    

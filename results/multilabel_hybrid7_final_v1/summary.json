@@ -1,0 +1,18 @@
+{
+  "run_type": "multilabel_hybrid",
+  "model": "hybrid7",
+  "n_classes": 10,
+  "n_graphs_total": 3491,
+  "best_val_macroF1": 0.60189067686057,
+  "best_epoch": 18,
+  "metrics": {
+    "test_loss": 0.05824829450317921,
+    "threshold": 0.5,
+    "test_thr_microF1": 0.9042448173741362,
+    "test_thr_macroF1": 0.585659650401249,
+    "test_thr_samplesF1": 0.8740458015267175,
+    "test_topk_microF1": 0.6450381679389313,
+    "test_topk_macroF1": 0.5532491225025862,
+    "test_topk_samplesF1": 0.6450381679389312
+  }
+}
